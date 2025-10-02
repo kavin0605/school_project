@@ -10,6 +10,9 @@ import { AuthProvider } from './context/AuthContext';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
 
+// Common Components
+import ScrollToTop from './components/Common/ScrollToTop';
+
 // Pages
 import Home from './pages/Home';
 import About from './pages/About';
@@ -66,6 +69,7 @@ function App() {
       <CssBaseline />
       <AuthProvider>
         <Router>
+          <ScrollToTop />
           <div className="App">
             <Header />
             <main>
