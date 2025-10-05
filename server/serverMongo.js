@@ -48,6 +48,9 @@ const connectDB = async () => {
     // Create sample students if they don't exist
     await createSampleStudents();
     
+    // Create sample admission applications if they don't exist
+    await createSampleAdmissionApplications();
+    
   } catch (error) {
     console.error('❌ MongoDB connection error:', error.message);
     console.log('\n💡 MongoDB Setup Instructions:');
@@ -458,6 +461,88 @@ const createSampleStudents = async () => {
     
   } catch (error) {
     console.error('Error creating sample students:', error.message);
+  }
+};
+
+// Function to create sample admission applications
+const createSampleAdmissionApplications = async () => {
+  try {
+    const AdmissionApplication = require('./models/AdmissionApplication');
+    
+    // Check if sample applications already exist
+    const existingCount = await AdmissionApplication.countDocuments();
+    if (existingCount > 0) {
+      console.log('📝 Sample admission applications already exist, skipping creation');
+      return;
+    }
+
+    console.log('📝 Creating sample admission applications...');
+
+    // Sample Application 1
+    const application1 = new AdmissionApplication({
+      applicationNumber: 'ADM20250001',
+      studentInfo: {
+        firstName: 'Rahul',
+        lastName: 'Sharma',
+        dateOfBirth: new Date('2010-03-15'),
+        gender: 'male',
+        class: '9th Grade',
+        previousSchool: 'ABC Public School',
+        medicalConditions: 'None'
+      },
+      parentInfo: {
+        fatherName: 'Rajesh Sharma',
+        motherName: 'Sunita Sharma',
+        email: 'rajesh.sharma@email.com',
+        phone: '9876543210',
+        occupation: 'Software Engineer',
+        address: {
+          street: '123 MG Road',
+          city: 'Chennai',
+          state: 'Tamil Nadu',
+          zipCode: '600002',
+          country: 'India'
+        }
+      },
+      status: 'pending'
+    });
+
+    // Sample Application 2
+    const application2 = new AdmissionApplication({
+      applicationNumber: 'ADM20250002',
+      studentInfo: {
+        firstName: 'Priya',
+        lastName: 'Kumar',
+        dateOfBirth: new Date('2009-07-22'),
+        gender: 'female',
+        class: '10th Grade',
+        previousSchool: 'St. Mary\'s School',
+        medicalConditions: 'Mild asthma'
+      },
+      parentInfo: {
+        fatherName: 'Suresh Kumar',
+        motherName: 'Lakshmi Kumar',
+        email: 'suresh.kumar@email.com',
+        phone: '9876543211',
+        occupation: 'Doctor',
+        address: {
+          street: '456 Anna Nagar',
+          city: 'Chennai',
+          state: 'Tamil Nadu',
+          zipCode: '600040',
+          country: 'India'
+        }
+      },
+      status: 'pending'
+    });
+
+    await application1.save();
+    await application2.save();
+    
+    console.log('✅ Sample admission applications created successfully');
+    
+  } catch (error) {
+    console.error('Error creating sample admission applications:', error.message);
   }
 };
 

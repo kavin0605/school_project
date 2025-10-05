@@ -26,6 +26,23 @@ const upload = multer({
     fileSize: 5 * 1024 * 1024 // 5MB limit
   },
   fileFilter: function (req, file, cb) {
+    });s
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, 'uploads/documents/')
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ 
+  storage: storage,
+  limits: {
+    fileSize: 5 * 1024 * 1024 // 5MB limit
+  },
+  fileFilter: function (req, file, cb) {
     const allowedTypes = /jpeg|jpg|png|pdf|doc|docx/;
     const extname = allowedTypes.test(path.extname(file.originalname).toLowerCase());
     const mimetype = allowedTypes.test(file.mimetype);
@@ -33,25 +50,15 @@ const upload = multer({
     if (mimetype && extname) {
       return cb(null, true);
     } else {
-      cb(new Error('Only images and documents are allowed'));
+      cb(new Error('Only images, PDFs, and Word documents are allowed'));
     }
   }
 });
 
-// Email configuration (uses environment variables)
-const createTransporter = () => {
-  console.log('🔧 Creating email transporter...');
-  console.log('EMAIL_USER:', process.env.EMAIL_USER);
-  console.log('EMAIL_PASS:', process.env.EMAIL_PASS ? `SET (${process.env.EMAIL_PASS.length} chars)` : 'NOT SET');
-  
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || process.env.EMAIL_PASS === 'your_16_character_app_password_here') {
-    console.log('⚠️ Email not configured properly - notifications will be logged to console');
-    return null;
-  }
-
-  console.log('✅ Email transporter configured successfully');
-  return nodemailer.createTransport({
-    service: process.env.EMAIL_SERVICE || 'gmail',
+// Configure email transporter
+const createEmailTransporter = () => {
+  return nodemailer.createTransporter({
+    service: 'gmail',
     auth: {
       user: process.env.EMAIL_USER,
       pass: process.env.EMAIL_PASS
@@ -59,31 +66,14 @@ const createTransporter = () => {
   });
 };
 
-// Function to send admission notification email
+// Send notification email
 const sendAdmissionNotification = async (applicationData) => {
   try {
-    const transporter = createTransporter();
-    if (!transporter) {
-      console.log('📧 Email Configuration Not Set - Admission notification would contain:');
-      console.log(`
-        To: Admissions Office (${process.env.ADMIN_EMAIL || 'admin@school.com'})
-        Subject: New Admission Application - ${applicationData.applicationNumber}
-        
-        A new admission application has been submitted:
-        - Student: ${applicationData.studentInfo.firstName} ${applicationData.studentInfo.lastName}
-        - Class: ${applicationData.studentInfo.class}
-        - Application Number: ${applicationData.applicationNumber}
-        - Parent Email: ${applicationData.parentInfo.email}
-        - Parent Phone: ${applicationData.parentInfo.phone}
-        
-        Please review the application in the admin portal.
-      `);
-      return;
-    }
-
+    const transporter = createEmailTransporter();
+    
     const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to: process.env.ADMIN_EMAIL || 'admin@school.com',
+      from: process.env.EMAIL_USER,
+      to: 'nalandaschool1985@gmail.com',
       subject: `New Admission Application - ${applicationData.applicationNumber}`,
       html: `
         <h2>New Admission Application Received</h2>
@@ -115,108 +105,84 @@ const sendAdmissionNotification = async (applicationData) => {
   }
 };
 
-// Function to send approval notification email
-const sendApprovalNotification = async (applicationData, studentData = null) => {
+// Send approval notification email to parent
+const sendApprovalNotification = async (applicationData, studentData) => {
   try {
-    const transporter = createTransporter();
-    if (!transporter) {
-      console.log('📧 Email Configuration Not Set - Approval notification would be sent to:');
-      console.log(`
-        To: ${applicationData.parentInfo.email}
-        Subject: Admission Approved - ${applicationData.applicationNumber}
-        
-        Dear ${applicationData.parentInfo.fatherName} and ${applicationData.parentInfo.motherName},
-        
-        Congratulations! Your child's admission application has been APPROVED.
-        
-        Student: ${applicationData.studentInfo.firstName} ${applicationData.studentInfo.lastName}
-        Application Number: ${applicationData.applicationNumber}
-        
-        NEXT STEPS - VERY IMPORTANT:
-        ✅ Please bring the following ORIGINAL documents within ONE WEEK:
-        • Birth Certificate
-        • Previous School Transfer Certificate
-        • Aadhar Card (Student & Parents)
-        • Passport-size Photos (6 copies)
-        • Medical Certificate
-        • Previous Academic Records
-        
-        📅 Please visit the school office between 9:00 AM - 4:00 PM (Monday to Friday)
-        📍 Address: Nalanda School, [School Address]
-        📞 Contact: ${process.env.ADMIN_EMAIL || 'admin@school.com'}
-        
-        Welcome to the Nalanda School family!
-      `);
+    // Check if email configuration exists
+    if (!process.env.EMAIL_PASS || process.env.EMAIL_PASS === 'your_16_character_app_password_here') {
+      console.log('⚠️ Email not configured. Here\'s what would be sent:');
+      console.log('📧 TO:', applicationData.parentInfo.email);
+      console.log('📧 SUBJECT: 🎉 Admission Approved - Welcome to Nalanda School!');
+      console.log('📧 MESSAGE: Admission approved for', applicationData.studentInfo.firstName, applicationData.studentInfo.lastName);
+      console.log('📧 Instructions: Please visit school within one week with original documents');
       return;
     }
 
+    const transporter = createEmailTransporter();
+    
     const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
+      from: process.env.EMAIL_USER,
       to: applicationData.parentInfo.email,
-      subject: `🎉 Admission Approved - Welcome to Nalanda School! (Application: ${applicationData.applicationNumber})`,
+      subject: `🎉 Admission Approved - Welcome to Nalanda School!`,
       html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background-color: #f9f9f9; padding: 20px;">
-          <div style="background-color: #4CAF50; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0;">
-            <h1 style="margin: 0;">🎉 Congratulations!</h1>
-            <h2 style="margin: 10px 0 0 0;">Admission Approved</h2>
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 10px;">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #2e7d32; margin-bottom: 10px;">🎉 Congratulations!</h1>
+            <h2 style="color: #1976d2; margin: 0;">Admission Approved</h2>
           </div>
           
-          <div style="background-color: white; padding: 30px; border-radius: 0 0 10px 10px;">
-            <p><strong>Dear ${applicationData.parentInfo.fatherName} and ${applicationData.parentInfo.motherName},</strong></p>
-            
-            <p>We are delighted to inform you that your child's admission application has been <strong>APPROVED</strong>!</p>
-            
-            <div style="background-color: #E8F5E8; padding: 15px; border-left: 5px solid #4CAF50; margin: 20px 0;">
-              <p><strong>Student:</strong> ${applicationData.studentInfo.firstName} ${applicationData.studentInfo.lastName}</p>
-              <p><strong>Application Number:</strong> ${applicationData.applicationNumber}</p>
-              <p><strong>Class:</strong> ${applicationData.studentInfo.class}</p>
-              ${studentData ? `<p><strong>Roll Number:</strong> ${studentData.rollNumber}</p>` : ''}
-            </div>
-            
-            <div style="background-color: #FFF3CD; padding: 20px; border: 1px solid #FFEAA7; border-radius: 5px; margin: 20px 0;">
-              <h3 style="color: #856404; margin-top: 0;">📋 IMMEDIATE ACTION REQUIRED</h3>
-              <p style="color: #856404;"><strong>Please bring the following ORIGINAL documents within ONE WEEK:</strong></p>
-              <ul style="color: #856404;">
-                <li>✅ Birth Certificate</li>
-                <li>✅ Previous School Transfer Certificate</li>
-                <li>✅ Aadhar Card (Student & Parents)</li>
-                <li>✅ Passport-size Photos (6 copies)</li>
-                <li>✅ Medical Certificate from Registered Doctor</li>
-                <li>✅ Previous Academic Records/Report Cards</li>
-                <li>✅ Caste Certificate (if applicable)</li>
-                <li>✅ Income Certificate (if applying for fee concession)</li>
-              </ul>
-            </div>
-            
-            <div style="background-color: #E7F3FF; padding: 15px; border-left: 5px solid #2196F3; margin: 20px 0;">
-              <h3 style="margin-top: 0;">📅 Visit Our School Office</h3>
-              <p><strong>Timing:</strong> 9:00 AM - 4:00 PM (Monday to Friday)</p>
-              <p><strong>Address:</strong> Nalanda School<br>
-              [Complete School Address]<br>
-              [City, State, PIN Code]</p>
-              <p><strong>Contact:</strong> ${process.env.ADMIN_EMAIL || 'admin@school.com'}</p>
-              <p><strong>Phone:</strong> [School Phone Number]</p>
-            </div>
-            
-            <div style="background-color: #FFEBEE; padding: 15px; border-left: 5px solid #F44336; margin: 20px 0;">
-              <h4 style="margin-top: 0;">⚠️ Important Notes:</h4>
-              <ul>
-                <li>Admission will be confirmed only after document verification</li>
-                <li>Fee payment details will be provided during your visit</li>
-                <li>Failure to submit documents within one week may result in admission cancellation</li>
-                <li>Please bring both parents for the final admission process</li>
-              </ul>
-            </div>
-            
-            <p style="text-align: center; font-size: 18px; color: #4CAF50; font-weight: bold; margin: 30px 0;">
-              Welcome to the Nalanda School Family! 🎓
+          <div style="background-color: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #333; margin-top: 0;">Student Details:</h3>
+            <p><strong>Name:</strong> ${applicationData.studentInfo.firstName} ${applicationData.studentInfo.lastName}</p>
+            <p><strong>Application Number:</strong> ${applicationData.applicationNumber}</p>
+            <p><strong>Applied for Class:</strong> ${applicationData.studentInfo.class}</p>
+            ${studentData ? `
+            <p><strong>Roll Number:</strong> ${studentData.rollNumber}</p>
+            <p><strong>Assigned Class:</strong> ${studentData.academicInfo.class}</p>
+            <p><strong>Section:</strong> ${studentData.academicInfo.section}</p>
+            <p><strong>Admission Number:</strong> ${studentData.admissionNumber}</p>
+            ` : '<p><em>Roll number and section will be assigned during document verification.</em></p>'}
+          </div>
+          
+          <div style="background-color: #fff3e0; padding: 20px; border-radius: 8px; border-left: 4px solid #ff9800; margin-bottom: 20px;">
+            <h3 style="color: #e65100; margin-top: 0;">📋 Important Instructions:</h3>
+            <ol style="line-height: 1.8;">
+              <li><strong>Document Submission:</strong> Please bring all original documents for verification within <strong>one week</strong> from today.</li>
+              <li><strong>Required Documents:</strong>
+                <ul style="margin: 10px 0;">
+                  <li>Birth Certificate (Original + Copy)</li>
+                  <li>Previous School Transfer Certificate</li>
+                  <li>Mark Sheets of Previous Classes</li>
+                  <li>Aadhar Card (Student & Parent)</li>
+                  <li>Passport Size Photos (4 copies)</li>
+                  <li>Medical Certificate</li>
+                </ul>
+              </li>
+              <li><strong>Fee Payment:</strong> Complete the admission fee payment during document verification.</li>
+              <li><strong>Meeting Schedule:</strong> Visit the school office between 9:00 AM - 4:00 PM on working days.</li>
+            </ol>
+          </div>
+          
+          <div style="background-color: #e8f5e8; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #2e7d32; margin-top: 0;">📞 Contact Information:</h3>
+            <p><strong>School Address:</strong> Nalanda School, Education Street, Chennai</p>
+            <p><strong>Phone:</strong> +91 44 1234 5678</p>
+            <p><strong>Email:</strong> nalandaschool1985@gmail.com</p>
+            <p><strong>Office Hours:</strong> Monday to Friday, 9:00 AM - 4:00 PM</p>
+          </div>
+          
+          <div style="background-color: #e3f2fd; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+            <h3 style="color: #1976d2; margin-top: 0;">🔐 Login Credentials:</h3>
+            <p>Student and parent login accounts have been created. You will receive login details during document verification.</p>
+          </div>
+          
+          <div style="text-align: center; margin-top: 30px; padding: 20px; background-color: #f0f0f0; border-radius: 8px;">
+            <p style="margin: 0; color: #666; font-size: 14px;">
+              <strong>Deadline Reminder:</strong> Please complete document verification within 7 days to secure your admission.
             </p>
-            
-            <p>We look forward to seeing you soon and beginning your child's educational journey with us.</p>
-            
-            <p>Best regards,<br>
-            <strong>Admissions Office</strong><br>
-            Nalanda School</p>
+            <p style="margin: 10px 0 0 0; color: #666; font-size: 14px;">
+              We look forward to welcoming you to the Nalanda School family! 🎓
+            </p>
           </div>
         </div>
       `
@@ -225,12 +191,12 @@ const sendApprovalNotification = async (applicationData, studentData = null) => 
     await transporter.sendMail(mailOptions);
     console.log('✅ Approval notification email sent successfully to:', applicationData.parentInfo.email);
   } catch (error) {
-    console.error('⚠️ Error sending approval notification email:', error.message);
-    console.log('📧 Please manually inform the parent about the approval');
+    console.error('❌ Error sending approval notification:', error.message);
+    throw error;
   }
 };
 
-// @route   POST /api/admissions/apply
+// @route   POST /api/admission/apply
 // @desc    Submit admission application
 // @access  Public
 router.post('/apply', [
@@ -280,15 +246,18 @@ router.post('/apply', [
       address
     } = req.body;
 
-    // Generate unique application number using a more robust approach
+    // Generate unique application number
     const year = new Date().getFullYear();
+    
+    // Find the highest existing application number for this year
     const existingApplications = await AdmissionApplication.find({
       applicationNumber: { $regex: `^ADM${year}` }
     }).sort({ applicationNumber: -1 }).limit(1);
     
     let nextNumber = 1;
     if (existingApplications.length > 0) {
-      const lastNumber = parseInt(existingApplications[0].applicationNumber.slice(-4));
+      const lastAppNumber = existingApplications[0].applicationNumber;
+      const lastNumber = parseInt(lastAppNumber.slice(-4)); // Extract last 4 digits
       nextNumber = lastNumber + 1;
     }
     
@@ -348,7 +317,7 @@ router.post('/apply', [
   }
 });
 
-// @route   GET /api/admissions/applications
+// @route   GET /api/admission/applications
 // @desc    Get all admission applications (Admin only)
 // @access  Private
 router.get('/applications', async (req, res) => {
@@ -370,7 +339,7 @@ router.get('/applications', async (req, res) => {
   }
 });
 
-// @route   POST /api/admissions/approve/:id
+// @route   POST /api/admission/approve/:id
 // @desc    Approve admission and create student/parent accounts
 // @access  Private (Admin only)
 router.post('/approve/:id', [
@@ -411,28 +380,23 @@ router.post('/approve/:id', [
       });
     }
 
-    // Create student account
+    // Create student account in Student collection
     const student = new Student({
       rollNumber,
-      admissionNumber: application.applicationNumber,
       personalInfo: {
         firstName: application.studentInfo.firstName,
         lastName: application.studentInfo.lastName,
+        email: `${rollNumber}@nalandaschool.edu`,
         dateOfBirth: application.studentInfo.dateOfBirth,
-        gender: application.studentInfo.gender,
-        email: `${application.studentInfo.firstName.toLowerCase()}.${application.studentInfo.lastName.toLowerCase()}@student.nalanda.edu`,
-        phone: '',
         address: application.parentInfo.address
       },
       academicInfo: {
         class: studentClass,
-        section: section,
-        academicYear: '2025-2026',
-        admissionDate: new Date()
+        section,
+        academicYear: '2024-25'
       },
       loginCredentials: {
-        password: studentPassword,
-        isActive: true
+        password: studentPassword
       },
       parentInfo: {
         fatherName: application.parentInfo.fatherName,
@@ -444,24 +408,22 @@ router.post('/approve/:id', [
 
     await student.save();
 
-    // Create or update parent account
+    // Create or update parent account in Parent collection
     let parent = await Parent.findOne({ 
-      'personalInfo.email': application.parentInfo.email 
+      'personalInfo.email': application.parentInfo.email
     });
 
     if (!parent) {
       parent = new Parent({
         personalInfo: {
-          firstName: application.parentInfo.fatherName,
-          lastName: '',
+          firstName: application.parentInfo.fatherName.split(' ')[0],
+          lastName: application.parentInfo.fatherName.split(' ').slice(1).join(' ') || application.parentInfo.fatherName,
           email: application.parentInfo.email,
           phone: application.parentInfo.phone,
           address: application.parentInfo.address
         },
-        loginCredentials: {
-          password: parentPassword,
-          isActive: true
-        },
+        relationship: 'father',
+        occupation: application.parentInfo.occupation,
         children: [{
           studentId: student._id,
           rollNumber,
@@ -469,7 +431,10 @@ router.post('/approve/:id', [
           studentName: `${application.studentInfo.firstName} ${application.studentInfo.lastName}`,
           class: studentClass,
           relationship: 'child'
-        }]
+        }],
+        loginCredentials: {
+          password: parentPassword
+        }
       });
     } else {
       // Add child to existing parent
@@ -498,18 +463,16 @@ router.post('/approve/:id', [
     
     await application.save();
 
-    // Send approval email notification (optional - won't fail if email not configured)
+    // Send approval notification email to parent
     try {
       await sendApprovalNotification(application, student);
-      console.log('✅ Approval email sent successfully');
     } catch (emailError) {
-      console.log('⚠️ Email notification failed (this is optional):', emailError.message);
-      console.log('📧 Please manually inform the parent about approval');
+      console.log('Email notification failed (this is optional):', emailError.message);
     }
 
     res.json({
       success: true,
-      message: 'Admission approved and accounts created successfully. Parent will be notified.',
+      message: 'Admission approved and accounts created successfully',
       data: {
         student: student.toJSON(),
         parent: parent.toJSON(),
@@ -527,7 +490,7 @@ router.post('/approve/:id', [
 });
 
 // @route   POST /api/admissions/simple-approve/:id
-// @desc    Simple approval - just change status and send email
+// @desc    Simple approve admission (just change status and send email)
 // @access  Private (Admin only)
 router.post('/simple-approve/:id', async (req, res) => {
   try {
@@ -542,81 +505,47 @@ router.post('/simple-approve/:id', async (req, res) => {
       });
     }
 
-    // Update application status to approved
-    application.status = 'approved';
-    application.admissionDate = new Date();
-    await application.save();
-
-    console.log(`📧 Attempting to send approval email to: ${application.parentInfo.email}`);
-    
-    // Send approval email notification (optional - won't fail if email not configured)
-    try {
-      await sendApprovalNotification(application, null);
-      console.log('✅ Approval email sent successfully');
-    } catch (emailError) {
-      console.log('⚠️ Email notification failed:', emailError.message);
-      console.log('📧 Email would have been sent to:', application.parentInfo.email);
-    }
-
-    res.json({
-      success: true,
-      message: 'Application approved successfully. Parent will be notified to visit school with documents.',
-      data: {
-        application: application
-      }
-    });
-
-  } catch (error) {
-    console.error('Error approving admission:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Error approving admission'
-    });
-  }
-});
-
-// @route   POST /api/admissions/test-email
-// @desc    Test email configuration
-// @access  Private (Admin only)
-router.post('/test-email', async (req, res) => {
-  try {
-    const { email } = req.body;
-    const testEmail = email || 'test@example.com';
-    
-    console.log('🧪 Testing email configuration...');
-    const transporter = createTransporter();
-    
-    if (!transporter) {
-      return res.json({
+    if (application.status === 'approved') {
+      return res.status(400).json({
         success: false,
-        message: 'Email not configured - check server console for logs'
+        message: 'Application is already approved'
       });
     }
 
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-      to: testEmail,
-      subject: '🧪 Email Test from Nalanda School',
-      html: `
-        <h2>Email Test Successful! ✅</h2>
-        <p>This is a test email from Nalanda School admission system.</p>
-        <p>If you received this, email configuration is working correctly.</p>
-        <p>Sent at: ${new Date().toLocaleString()}</p>
-      `
-    };
-
-    await transporter.sendMail(mailOptions);
+    // Update application status
+    application.status = 'approved';
+    application.reviewDate = new Date();
+    application.remarks = 'Approved - Please visit school with original documents within one week';
     
+    await application.save();
+
+    // Send approval notification email
+    try {
+      // For simple approval, we don't create student record yet, so pass null for studentData
+      // The email template will handle the case when studentData is null
+      await sendApprovalNotification(application, null);
+      console.log('✅ Approval notification email sent successfully');
+    } catch (emailError) {
+      console.log('📧 Email notification failed (this is optional):', emailError.message);
+      // Log the notification details to console as backup
+      console.log('\n📋 APPROVAL NOTIFICATION (Email failed, showing in console):');
+      console.log(`To: ${application.parentInfo.email}`);
+      console.log(`Student: ${application.studentInfo.firstName} ${application.studentInfo.lastName}`);
+      console.log(`Application: ${application.applicationNumber}`);
+      console.log('Message: Please bring original documents and visit school within one week');
+    }
+
     res.json({
       success: true,
-      message: `Test email sent successfully to ${testEmail}`
+      message: 'Application approved successfully and notification sent',
+      data: { application }
     });
 
   } catch (error) {
-    console.error('Email test failed:', error);
+    console.error('Error approving application:', error);
     res.status(500).json({
       success: false,
-      message: `Email test failed: ${error.message}`
+      message: 'Error approving application'
     });
   }
 });

@@ -67,6 +67,7 @@ const AdminDashboard = () => {
   const [editingEvent, setEditingEvent] = useState(null);
   const [students, setStudents] = useState([]);
   const [admissionApplications, setAdmissionApplications] = useState([]);
+  const [selectedApplication, setSelectedApplication] = useState(null);
   const [events, setEvents] = useState([]);
   const [newStudent, setNewStudent] = useState({
     firstName: '',
@@ -123,7 +124,7 @@ const AdminDashboard = () => {
       });
       if (response.ok) {
         const data = await response.json();
-        setAdmissionApplications(data.applications || []);
+        setAdmissionApplications(data.data || []);
       }
     } catch (error) {
       console.error('Error loading admission applications:', error);
@@ -190,21 +191,29 @@ const AdminDashboard = () => {
   };
 
   const approveApplication = async (applicationId) => {
+    if (!window.confirm('Are you sure you want to approve this application? The applicant will be notified to visit the school with original documents within one week.')) {
+      return;
+    }
+
     try {
-      const response = await fetch(`/api/admissions/applications/${applicationId}/approve`, {
+      const response = await fetch(`/api/admissions/simple-approve/${applicationId}`, {
         method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       });
 
       if (response.ok) {
         loadAdmissionApplications();
-        loadStudents();
-        alert('Application approved and student account created!');
+        alert('✅ Application approved successfully!\n\n📧 The applicant has been notified to:\n• Bring original documents\n• Visit school within one week\n• Complete face-to-face admission process');
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.message}`);
       }
     } catch (error) {
       console.error('Error approving application:', error);
+      alert('Error approving application');
     }
   };
 
@@ -651,9 +660,9 @@ const AdminDashboard = () => {
                 {admissionApplications.map((application) => (
                   <TableRow key={application._id}>
                     <TableCell>{application.applicationNumber}</TableCell>
-                    <TableCell>{application.studentDetails?.firstName} {application.studentDetails?.lastName}</TableCell>
-                    <TableCell>{application.studentDetails?.class}</TableCell>
-                    <TableCell>{application.parentDetails?.email}</TableCell>
+                    <TableCell>{application.studentInfo?.firstName} {application.studentInfo?.lastName}</TableCell>
+                    <TableCell>{application.studentInfo?.class}</TableCell>
+                    <TableCell>{application.parentInfo?.email}</TableCell>
                     <TableCell>
                       <Chip 
                         label={application.status} 
@@ -672,7 +681,12 @@ const AdminDashboard = () => {
                           Approve
                         </Button>
                       )}
-                      <IconButton size="small" color="primary" sx={{ ml: 1 }}>
+                      <IconButton 
+                        size="small" 
+                        color="primary" 
+                        sx={{ ml: 1 }}
+                        onClick={() => setSelectedApplication(application)}
+                      >
                         <Visibility />
                       </IconButton>
                     </TableCell>
@@ -1310,6 +1324,156 @@ const AdminDashboard = () => {
         <DialogActions>
           <Button onClick={() => setOpenEditEvent(false)}>Cancel</Button>
           <Button variant="contained" onClick={handleUpdateEvent}>Update Event</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Application Details Dialog */}
+      <Dialog 
+        open={!!selectedApplication} 
+        onClose={() => setSelectedApplication(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          Application Details - {selectedApplication?.applicationNumber}
+        </DialogTitle>
+        <DialogContent>
+          {selectedApplication && (
+            <Box sx={{ mt: 2 }}>
+              <Grid container spacing={3}>
+                {/* Student Information */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                    Student Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">First Name:</Typography>
+                      <Typography variant="body1">{selectedApplication.studentInfo?.firstName}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Last Name:</Typography>
+                      <Typography variant="body1">{selectedApplication.studentInfo?.lastName}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Date of Birth:</Typography>
+                      <Typography variant="body1">
+                        {selectedApplication.studentInfo?.dateOfBirth ? 
+                          new Date(selectedApplication.studentInfo.dateOfBirth).toLocaleDateString() : 'N/A'}
+                      </Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Gender:</Typography>
+                      <Typography variant="body1">{selectedApplication.studentInfo?.gender}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Class:</Typography>
+                      <Typography variant="body1">{selectedApplication.studentInfo?.class}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Previous School:</Typography>
+                      <Typography variant="body1">{selectedApplication.studentInfo?.previousSchool || 'N/A'}</Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="text.secondary">Medical Conditions:</Typography>
+                      <Typography variant="body1">{selectedApplication.studentInfo?.medicalConditions || 'None'}</Typography>
+                    </Grid>
+                  </Grid>
+                </Grid>
+
+                {/* Parent Information */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                    Parent Information
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Father's Name:</Typography>
+                      <Typography variant="body1">{selectedApplication.parentInfo?.fatherName}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Mother's Name:</Typography>
+                      <Typography variant="body1">{selectedApplication.parentInfo?.motherName}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Email:</Typography>
+                      <Typography variant="body1">{selectedApplication.parentInfo?.email}</Typography>
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Phone:</Typography>
+                      <Typography variant="body1">{selectedApplication.parentInfo?.phone}</Typography>
+                    </Grid>
+                    <Grid item xs={12}>
+                      <Typography variant="body2" color="text.secondary">Occupation:</Typography>
+                      <Typography variant="body1">{selectedApplication.parentInfo?.occupation || 'N/A'}</Typography>
+                    </Grid>
+                  </Grid>
+                </Grid>
+
+                {/* Address Information */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                    Address
+                  </Typography>
+                  <Typography variant="body1">
+                    {selectedApplication.parentInfo?.address?.street}<br/>
+                    {selectedApplication.parentInfo?.address?.city}, {selectedApplication.parentInfo?.address?.state}<br/>
+                    {selectedApplication.parentInfo?.address?.zipCode}, {selectedApplication.parentInfo?.address?.country}
+                  </Typography>
+                </Grid>
+
+                {/* Application Status */}
+                <Grid item xs={12}>
+                  <Typography variant="h6" color="primary" sx={{ mb: 2 }}>
+                    Application Status
+                  </Typography>
+                  <Grid container spacing={2}>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Status:</Typography>
+                      <Chip 
+                        label={selectedApplication.status} 
+                        color={selectedApplication.status === 'pending' ? 'warning' : selectedApplication.status === 'approved' ? 'success' : 'error'}
+                        size="small"
+                      />
+                    </Grid>
+                    <Grid item xs={6}>
+                      <Typography variant="body2" color="text.secondary">Submission Date:</Typography>
+                      <Typography variant="body1">
+                        {new Date(selectedApplication.submissionDate).toLocaleDateString()}
+                      </Typography>
+                    </Grid>
+                    {selectedApplication.assignedRollNumber && (
+                      <>
+                        <Grid item xs={6}>
+                          <Typography variant="body2" color="text.secondary">Assigned Roll Number:</Typography>
+                          <Typography variant="body1">{selectedApplication.assignedRollNumber}</Typography>
+                        </Grid>
+                        <Grid item xs={6}>
+                          <Typography variant="body2" color="text.secondary">Assigned Class:</Typography>
+                          <Typography variant="body1">{selectedApplication.assignedClass}</Typography>
+                        </Grid>
+                      </>
+                    )}
+                  </Grid>
+                </Grid>
+              </Grid>
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setSelectedApplication(null)}>Close</Button>
+          {selectedApplication?.status === 'pending' && (
+            <Button 
+              variant="contained" 
+              color="success"
+              onClick={() => {
+                approveApplication(selectedApplication._id);
+                setSelectedApplication(null);
+              }}
+            >
+              Approve Application
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
     </Container>

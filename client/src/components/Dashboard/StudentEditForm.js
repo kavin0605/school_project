@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, memo, useEffect } from 'react';
 import {
   Grid,
   TextField,
@@ -34,45 +34,90 @@ import {
 
 const StudentEditForm = ({ student, onStudentChange }) => {
   const [tabValue, setTabValue] = useState(0);
+  
+  // Completely isolated form state - ZERO parent updates during typing
+  const [formData, setFormData] = useState({
+    personalInfo: {
+      firstName: '',
+      lastName: '',
+      fatherName: '',
+      motherName: '',
+      dateOfBirth: '',
+      address: ''
+    },
+    academicInfo: {
+      class: '',
+      section: '',
+      academicYear: ''
+    },
+    attendance: {
+      records: [],
+      percentage: 0
+    }
+  });
 
-  // Helper functions using useCallback to prevent re-renders
-  const updatePersonalInfo = useCallback((field, value) => {
-    onStudentChange(prev => ({
+  // Initialize form data ONLY when student ID changes
+  useEffect(() => {
+    if (student) {
+      setFormData({
+        personalInfo: {
+          firstName: student.personalInfo?.firstName || '',
+          lastName: student.personalInfo?.lastName || '',
+          fatherName: student.personalInfo?.fatherName || '',
+          motherName: student.personalInfo?.motherName || '',
+          dateOfBirth: student.personalInfo?.dateOfBirth?.split('T')[0] || '',
+          address: student.personalInfo?.address || ''
+        },
+        academicInfo: {
+          class: student.academicInfo?.class || '',
+          section: student.academicInfo?.section || '',
+          academicYear: student.academicInfo?.academicYear || ''
+        },
+        attendance: {
+          records: student.attendance?.records || [],
+          percentage: student.attendance?.percentage || 0
+        }
+      });
+    }
+  }, [student?._id]); // Only when student changes, not on every render
+
+  // Simple local update functions - NEVER call parent
+  const updatePersonalField = useCallback((field, value) => {
+    setFormData(prev => ({
       ...prev,
       personalInfo: {
         ...prev.personalInfo,
         [field]: value
       }
     }));
-  }, [onStudentChange]);
+  }, []);
 
-  const updateAcademicInfo = useCallback((field, value) => {
-    onStudentChange(prev => ({
+  const updateAcademicField = useCallback((field, value) => {
+    setFormData(prev => ({
       ...prev,
       academicInfo: {
         ...prev.academicInfo,
         [field]: value
       }
     }));
-  }, [onStudentChange]);
+  }, []);
 
+  // Function to update attendance records locally - NO parent updates
   const updateAttendanceRecord = useCallback((index, field, value) => {
-    onStudentChange(prev => {
+    setFormData(prev => {
       const newRecords = [...prev.attendance.records];
       newRecords[index] = { ...newRecords[index], [field]: value };
       return {
         ...prev,
-        attendance: { ...prev.attendance, records: newRecords }
+        attendance: {
+          ...prev.attendance,
+          records: newRecords
+        }
       };
     });
-  }, [onStudentChange]);
+  }, []);
 
-  const TabPanel = ({ children, value, index }) => (
-    <div hidden={value !== index}>
-      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
-    </div>
-  );
-
+  // Function to add attendance record locally - NO parent updates
   const handleAddAttendance = useCallback(() => {
     const newRecord = {
       date: new Date().toISOString().split('T')[0],
@@ -81,14 +126,52 @@ const StudentEditForm = ({ student, onStudentChange }) => {
       period: 1
     };
     
-    onStudentChange(prev => ({
+    setFormData(prev => ({
       ...prev,
       attendance: {
         ...prev.attendance,
         records: [...prev.attendance.records, newRecord]
       }
     }));
-  }, [onStudentChange]);
+  }, []);
+
+  // Only update parent when explicitly called (e.g., on Save button)
+  const saveChanges = useCallback(() => {
+    if (student) {
+      const updatedStudent = {
+        ...student,
+        personalInfo: {
+          ...student.personalInfo,
+          ...formData.personalInfo
+        },
+        academicInfo: {
+          ...student.academicInfo,
+          ...formData.academicInfo
+        },
+        attendance: {
+          ...student.attendance,
+          ...formData.attendance
+        }
+      };
+      onStudentChange(updatedStudent);
+    }
+  }, [formData, student, onStudentChange]);
+
+  // Expose saveChanges function to parent
+  useEffect(() => {
+    window.saveStudentChanges = saveChanges;
+    
+    // Cleanup on unmount
+    return () => {
+      window.saveStudentChanges = null;
+    };
+  }, [saveChanges]);
+
+  const TabPanel = ({ children, value, index }) => (
+    <div hidden={value !== index}>
+      {value === index && <Box sx={{ pt: 2 }}>{children}</Box>}
+    </div>
+  );
 
   return (
     <>
@@ -109,25 +192,33 @@ const StudentEditForm = ({ student, onStudentChange }) => {
           <Grid item xs={6}>
             <TextField
               fullWidth
-              label="Name"
-              value={student?.personalInfo?.name || ''}
-              onChange={(e) => updatePersonalInfo('name', e.target.value)}
+              label="First Name"
+              value={formData.personalInfo.firstName}
+              onChange={(e) => updatePersonalField('firstName', e.target.value)}
+            />
+          </Grid>
+          <Grid item xs={6}>
+            <TextField
+              fullWidth
+              label="Last Name"
+              value={formData.personalInfo.lastName}
+              onChange={(e) => updatePersonalField('lastName', e.target.value)}
             />
           </Grid>
           <Grid item xs={6}>
             <TextField
               fullWidth
               label="Father's Name"
-              value={student?.personalInfo?.fatherName || ''}
-              onChange={(e) => updatePersonalInfo('fatherName', e.target.value)}
+              value={formData.personalInfo.fatherName}
+              onChange={(e) => updatePersonalField('fatherName', e.target.value)}
             />
           </Grid>
           <Grid item xs={6}>
             <TextField
               fullWidth
               label="Mother's Name"
-              value={student?.personalInfo?.motherName || ''}
-              onChange={(e) => updatePersonalInfo('motherName', e.target.value)}
+              value={formData.personalInfo.motherName}
+              onChange={(e) => updatePersonalField('motherName', e.target.value)}
             />
           </Grid>
           <Grid item xs={6}>
@@ -135,8 +226,8 @@ const StudentEditForm = ({ student, onStudentChange }) => {
               fullWidth
               label="Date of Birth"
               type="date"
-              value={student?.personalInfo?.dateOfBirth?.split('T')[0] || ''}
-              onChange={(e) => updatePersonalInfo('dateOfBirth', e.target.value)}
+              value={formData.personalInfo.dateOfBirth}
+              onChange={(e) => updatePersonalField('dateOfBirth', e.target.value)}
               InputLabelProps={{ shrink: true }}
             />
           </Grid>
@@ -146,8 +237,8 @@ const StudentEditForm = ({ student, onStudentChange }) => {
               multiline
               rows={3}
               label="Address"
-              value={student?.personalInfo?.address || ''}
-              onChange={(e) => updatePersonalInfo('address', e.target.value)}
+              value={formData.personalInfo.address}
+              onChange={(e) => updatePersonalField('address', e.target.value)}
             />
           </Grid>
         </Grid>
@@ -160,24 +251,24 @@ const StudentEditForm = ({ student, onStudentChange }) => {
             <TextField
               fullWidth
               label="Class"
-              value={student?.academicInfo?.class || ''}
-              onChange={(e) => updateAcademicInfo('class', e.target.value)}
+              value={formData.academicInfo.class}
+              onChange={(e) => updateAcademicField('class', e.target.value)}
             />
           </Grid>
           <Grid item xs={4}>
             <TextField
               fullWidth
               label="Section"
-              value={student?.academicInfo?.section || ''}
-              onChange={(e) => updateAcademicInfo('section', e.target.value)}
+              value={formData.academicInfo.section}
+              onChange={(e) => updateAcademicField('section', e.target.value)}
             />
           </Grid>
           <Grid item xs={4}>
             <TextField
               fullWidth
               label="Academic Year"
-              value={student?.academicInfo?.academicYear || ''}
-              onChange={(e) => updateAcademicInfo('academicYear', e.target.value)}
+              value={formData.academicInfo.academicYear}
+              onChange={(e) => updateAcademicField('academicYear', e.target.value)}
             />
           </Grid>
         </Grid>
@@ -191,10 +282,10 @@ const StudentEditForm = ({ student, onStudentChange }) => {
           </Button>
         </Box>
         <Typography variant="h6">
-          Current Attendance: {student?.attendance?.percentage}%
+          Current Attendance: {formData.attendance.percentage}%
         </Typography>
         <Box sx={{ maxHeight: 300, overflow: 'auto', mt: 2 }}>
-          {student?.attendance?.records?.map((record, index) => (
+          {formData.attendance.records?.map((record, index) => (
             <Card key={`attendance-${index}`} sx={{ mb: 1 }}>
               <CardContent sx={{ py: 1 }}>
                 <Grid container spacing={2}>
@@ -300,4 +391,4 @@ const StudentEditForm = ({ student, onStudentChange }) => {
   );
 };
 
-export default StudentEditForm;
+export default memo(StudentEditForm);

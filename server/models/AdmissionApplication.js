@@ -114,8 +114,20 @@ const admissionApplicationSchema = new mongoose.Schema({
 admissionApplicationSchema.pre('save', async function(next) {
   if (!this.applicationNumber) {
     const year = new Date().getFullYear();
-    const count = await this.constructor.countDocuments();
-    this.applicationNumber = `ADM${year}${String(count + 1).padStart(4, '0')}`;
+    
+    // Find the highest existing application number for this year
+    const existingApplications = await this.constructor.find({
+      applicationNumber: { $regex: `^ADM${year}` }
+    }).sort({ applicationNumber: -1 }).limit(1);
+    
+    let nextNumber = 1;
+    if (existingApplications.length > 0) {
+      const lastAppNumber = existingApplications[0].applicationNumber;
+      const lastNumber = parseInt(lastAppNumber.slice(-4)); // Extract last 4 digits
+      nextNumber = lastNumber + 1;
+    }
+    
+    this.applicationNumber = `ADM${year}${String(nextNumber).padStart(4, '0')}`;
   }
   next();
 });
